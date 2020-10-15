@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/exec"
@@ -10,7 +11,15 @@ import (
 	"sync"
 )
 
-const cmdDelimiter = "::"
+const (
+	cmdDelimiter     = "::"
+	cmdArgsDelimiter = ":"
+)
+
+var (
+	flagTimeout = flag.Duration("t", 0, "timeout in seconds")
+	flagOutput  = flag.Bool("o", false, "enable output of the cmds")
+)
 
 type cmdArgs struct {
 	name string
@@ -28,6 +37,10 @@ func parseArgs(args []string) []cmdArgs {
 		case arg == cmdDelimiter:
 			cmds = append(cmds, cmd)
 			cmd = cmdArgs{}
+		case arg == cmdArgsDelimiter:
+			newCmd := cmdArgs{name: cmd.name}
+			cmds = append(cmds, cmd)
+			cmd = newCmd
 		case cmd.name == "":
 			cmd.name = arg
 		default:
@@ -45,8 +58,10 @@ func runCmds(ctx context.Context, cmds []cmdArgs) {
 		go func(nr int, args cmdArgs) {
 			log.Printf("Starting cmd %d: %s %s\n", nr, args.name, strings.Join(args.args, " "))
 			cmd := exec.CommandContext(ctx, args.name, args.args...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
+			if *flagOutput {
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+			}
 			log.Printf("cmd %d is ready\n", nr)
 
 			if err := cmd.Run(); err != nil {
@@ -59,8 +74,12 @@ func runCmds(ctx context.Context, cmds []cmdArgs) {
 }
 
 func main() {
+	flag.Parse()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	if *flagTimeout != 0 {
+		ctx, cancel = context.WithTimeout(ctx, *flagTimeout)
+	}
 
 	c := make(chan os.Signal, 1)
 	go func() {
@@ -70,6 +89,6 @@ func main() {
 		cancel()
 	}()
 
-	cmds := parseArgs(os.Args[1:])
+	cmds := parseArgs(flag.Args())
 	runCmds(ctx, cmds)
 }

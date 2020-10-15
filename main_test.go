@@ -31,6 +31,14 @@ func TestParseArgs(t *testing.T) {
 			[]string{},
 			nil,
 		},
+		{
+			"two commands with short notation",
+			[]string{"abc", "def", ":", "ghi"},
+			[]cmdArgs{
+				{"abc", []string{"def"}},
+				{"abc", []string{"ghi"}},
+			},
+		},
 	}
 
 	for _, tt := range tests {
